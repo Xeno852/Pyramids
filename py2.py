@@ -1,6 +1,31 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QLabel, QFileDialog, QLineEdit
-from PyQt5.QtGui import QPixmap, QImage
+from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QLabel, QFileDialog, QLineEdit, QGraphicsScene, QGraphicsView
+from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen, QPainterPath
+from PyQt5.QtCore import Qt, QPoint
 import sys
+import numpy as np
+import cv2
+
+class ImageLabel(QLabel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.path = QPainterPath()
+
+    def mousePressEvent(self, event):
+        self.path.moveTo(event.pos())
+
+    def mouseMoveEvent(self, event):
+        self.path.lineTo(event.pos())
+        self.update()
+
+    def mouseReleaseEvent(self, event):
+        self.path.lineTo(event.pos())
+        self.update()
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.drawPath(self.path)
+
 
 class AppDemo(QMainWindow):
     def __init__(self):
@@ -16,28 +41,32 @@ class AppDemo(QMainWindow):
         self.loadImageButton.clicked.connect(self.loadImage)
         self.layout.addWidget(self.loadImageButton)
 
-        self.imageLabel = QLabel()
+        self.imageLabel = ImageLabel()
         self.layout.addWidget(self.imageLabel)
 
-        self.referenceLineInput = QLineEdit()
-        self.layout.addWidget(self.referenceLineInput)
-
-        self.addLineButton = QPushButton("Add Reference Line")
-        self.addLineButton.clicked.connect(self.addReferenceLine)
+        self.addLineButton = QPushButton("Add Silhouette")
+        self.addLineButton.clicked.connect(self.addSilhouette)
         self.layout.addWidget(self.addLineButton)
 
-        self.referenceLines = []
+        self.imagePath = None
 
     def loadImage(self):
-        imagePath, _ = QFileDialog.getOpenFileName()
-        if imagePath:
-            pixmap = QPixmap(imagePath)
+        self.imagePath, _ = QFileDialog.getOpenFileName()
+        if self.imagePath:
+            pixmap = QPixmap(self.imagePath)
             self.imageLabel.setPixmap(pixmap)
 
-    def addReferenceLine(self):
-        referenceLine = self.referenceLineInput.text()
-        self.referenceLines.append(referenceLine)
-        self.referenceLineInput.clear()
+    def addSilhouette(self):
+        if self.imagePath:
+            # convert image to grayscale
+            img = cv2.imread(self.imagePath, cv2.IMREAD_GRAYSCALE)
+            # apply threshold to get silhouette
+            _, img_thresh = cv2.threshold(img, 128, 255, cv2.THRESH_BINARY_INV)
+            # save the silhouette image
+            cv2.imwrite('silhouette.png', img_thresh)
+            # show the silhouette image
+            pixmap = QPixmap('silhouette.png')
+            self.imageLabel.setPixmap(pixmap)
 
 app = QApplication(sys.argv)
 demo = AppDemo()
