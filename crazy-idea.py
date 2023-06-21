@@ -32,13 +32,14 @@ def find_correspondences(image1, image2):
     # Initialize matcher
     matcher = cv2.BFMatcher(cv2.NORM_L2)
     
-    # Match keypoints
-    matches = matcher.match(descriptors1, descriptors2)
-    
-    # Filter matches based on a distance threshold
-    distance_threshold = 0.75
-    good_matches = [match for match in matches if match.distance < distance_threshold * match.distance]
-    
+    # Sort matches based on distance
+    matches = sorted(matches, key=lambda x: x.distance)
+
+    # Filter matches using Lowe's ratio test
+    ratio_threshold = 0.75
+    good_matches = [first for first, second in zip(matches, matches[1:]) if first.distance < ratio_threshold * second.distance]
+
+        
     # Extract corresponding points
     points1 = np.float32([keypoints1[match.queryIdx].pt for match in good_matches])
     points2 = np.float32([keypoints2[match.trainIdx].pt for match in good_matches])
@@ -76,10 +77,28 @@ def reconstruct_3d_points(disparity_map):
     return points_3d
 
 def export_points_to_obj(points_3d, output_path):
-    scene = pywavefront.Wavefront()
-    for point in points_3d:
-        x, y, z = point
-        scene.vertices.append((x, y, z))
+    with open(output_path, 'w') as file:
+        for x in range(points_3d.shape[0]):
+            for y in range(points_3d.shape[1]):
+                z = points_3d[x, y, 2]
+                file.write(f"v {x} {y} {z}\n")
+
+if __name__ == '__main__':
+    # Extract frames from a video
+    frames = extract_frames('path_to_your_video.mp4')
     
-    scene.save(output_path)
-print("ok")
+    # Take two consecutive frames as stereo images
+    image1 = frames[0]
+    image2 = frames[1]
+    
+    # Find correspondences between images
+    points1, points2 = find_correspondences(image1, image2)
+    
+    # Calculate disparity map
+    disparity_map = calculate_disparity_map(image1, image2)
+    
+    # Reconstruct 3D points
+    points_3d = reconstruct_3d_points(disparity_map)
+    
+    # Export to .obj file
+    export_points_to_obj(points_3d, 'output.obj')
