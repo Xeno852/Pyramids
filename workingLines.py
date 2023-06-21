@@ -3,6 +3,8 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QPushButton, QVBoxLayout
 from PyQt5.QtGui import QPixmap, QPainter, QPen, QFont
 from PyQt5.QtCore import Qt, QPointF
 import sys
+import json
+import os
 
 
 class AppDemo(QMainWindow):
@@ -18,6 +20,10 @@ class AppDemo(QMainWindow):
         self.loadImageButton = QPushButton("Load Image")
         self.loadImageButton.clicked.connect(self.loadImage)
         self.layout.addWidget(self.loadImageButton)
+
+        self.saveSilhouetteButton = QPushButton("Save Silhouette")
+        self.saveSilhouetteButton.clicked.connect(self.saveSilhouette)
+        self.layout.addWidget(self.saveSilhouetteButton)
 
         self.scrollArea = QScrollArea(self)
         self.layout.addWidget(self.scrollArea)
@@ -41,12 +47,17 @@ class AppDemo(QMainWindow):
         # Set an initial zoom factor
         self.zoomFactor = 1.0
 
+        # Load silhouettes
+        self.loadSilhouettes()
+        self.loadSilhouetteButton = QPushButton("Load Silhouette")
+        self.loadSilhouetteButton.clicked.connect(self.loadSilhouette)
+        self.layout.addWidget(self.loadSilhouetteButton)
+
     def loadImage(self):
         imagePath, _ = QFileDialog.getOpenFileName()
         if imagePath:
             self.originalPixmap = QPixmap(imagePath)
             self.displayImage()
-
     def displayImage(self):
         if hasattr(self, 'originalPixmap'):
             # Scale the image by the zoom factor
@@ -134,6 +145,35 @@ class AppDemo(QMainWindow):
         midPoint = (p1 + p2) / 2
         painter.drawText(midPoint, f"{distance} m")
 
+    def saveSilhouette(self):
+        if not hasattr(self, 'originalPixmap'):
+            return
+
+        silhouetteName, ok = QInputDialog.getText(self, "Silhouette Name", "Enter a name for the silhouette:")
+        if ok and silhouetteName:
+            self.silhouettes[silhouetteName] = [(p1.x(), p1.y(), p2.x(), p2.y(), dist) for p1, p2, dist in self.referenceLines]
+            self.saveSilhouettes()
+
+    def saveSilhouettes(self):
+        with open('silhouettes.json', 'w') as f:
+            json.dump(self.silhouettes, f)
+            
+    def applySilhouette(self, silhouetteName):
+        if silhouetteName in self.silhouettes:
+            self.referenceLines = self.silhouettes[silhouetteName]
+            self.displayImage()
+
+    def loadSilhouettes(self):
+        if os.path.exists('silhouettes.json'):
+            with open('silhouettes.json', 'r') as f:
+                self.silhouettes = {name: [(QPointF(p1x, p1y), QPointF(p2x, p2y), dist) for p1x, p1y, p2x, p2y, dist in lines] for name, lines in json.load(f).items()}
+
+        else:
+            self.silhouettes = {}
+    def loadSilhouette(self):
+        silhouetteName, ok = QInputDialog.getItem(self, "Load Silhouette", "Select a silhouette to load:", list(self.silhouettes.keys()), 0, False)
+        if ok and silhouetteName:
+            self.applySilhouette(silhouetteName)
 
 app = QApplication(sys.argv)
 demo = AppDemo()
